@@ -14,7 +14,7 @@ SESSIONS = {
     "new_york": (time(15, 0), time(21, 0)),
 }
 
-DEBUG_MODE = True  # Встановіть False для вимкнення debug-виводу
+DEBUG_MODE = False  # Встановіть True для увімкнення debug-виводу
 
 # ============================================================================
 # ДОПОМІЖНІ ФУНКЦІЇ
@@ -572,6 +572,14 @@ def load_data():
 
 def main():
     """Головна функція для запуску ICT бота."""
+    import sys
+    
+    # Перевірка аргументів командного рядка
+    global DEBUG_MODE
+    if '--debug' in sys.argv or '-d' in sys.argv:
+        DEBUG_MODE = True
+        print("DEBUG MODE: ENABLED")
+    
     print("=" * 80)
     print("ICT TRADING BOT - MULTI-TIMEFRAME SESSION ANALYSIS")
     print("=" * 80)
