@@ -213,8 +213,10 @@ def example_6_pattern_comparison():
         print(f"\n🎯 {pattern}")
         print(f"   Всього: {len(pattern_signals)} сигналів")
         if len(pattern_signals) > 0:
-            print(f"   BUY:  {buy_count} ({buy_count/len(pattern_signals)*100:.1f}%)")
-            print(f"   SELL: {sell_count} ({sell_count/len(pattern_signals)*100:.1f}%)")
+            buy_pct = (buy_count / len(pattern_signals)) * 100
+            sell_pct = (sell_count / len(pattern_signals)) * 100
+            print(f"   BUY:  {buy_count} ({buy_pct:.1f}%)")
+            print(f"   SELL: {sell_count} ({sell_pct:.1f}%)")
 
 def example_7_custom_filter():
     """Приклад 7: Власний фільтр (London + BUY + VERY HIGH)."""
@@ -266,8 +268,10 @@ def main():
     print("  0. Всі приклади")
     print("  q. Вихід")
     
+    max_example_num = len(examples)
+    
     while True:
-        choice = input("\nОберіть приклад (0-7, q для виходу): ").strip().lower()
+        choice = input(f"\nОберіть приклад (0-{max_example_num}, q для виходу): ").strip().lower()
         
         if choice == 'q':
             print("\nДо побачення! 👋")
