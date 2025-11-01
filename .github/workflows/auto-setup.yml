@@ -1,0 +1,32 @@
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
+    with:
+      persist-credentials: true
+      fetch-depth: 0
+
+  - name: Set up Git user
+    run: |
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    shell: pwsh
+
+  - name: Ensure scripts folder exists
+    run: New-Item -ItemType Directory -Path .\scripts -Force
+    shell: pwsh
+
+  - name: Run PowerShell setup script
+    run: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\create-and-commit-gitignore.ps1
+    shell: pwsh
+
+  - name: Create Pull Request with changes (if any)
+    uses: peter-evans/create-pull-request@v5
+    with:
+      token: ${{ secrets.GITHUB_TOKEN }}
+      commit-message: "chore: add .gitignore and stage bot files (auto-setup)"
+      branch: feat/auto-setup
+      title: "Auto: add .gitignore and stage bot files"
+      body: |
+        This PR was created by the auto-setup workflow to add a correct .gitignore and stage main bot files.
+      labels: automated
+      delete-branch: false
