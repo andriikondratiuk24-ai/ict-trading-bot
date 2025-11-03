@@ -276,9 +276,7 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
                 "note": note_text,
                 "trend": (h4.get('trend', pd.Series(['flat'])).iloc[-1] if ('trend' in h4.columns and not h4.empty) else 'flat'),
                 "type": direction,
-                "sweep_flag": note_flags["sweep_flag"],
-                "retest_flag": note_flags["retest_flag"],
-                "imb_flag": note_flags["imb_flag"]
+                **note_flags
             }
             signals.append(sig)
             total_signals += 1
