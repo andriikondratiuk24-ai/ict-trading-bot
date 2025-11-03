@@ -85,6 +85,35 @@ def compute_cisd_proxy(df: pd.DataFrame, window: int = 50, normalize: bool = Tru
         return rel
     return raw
 
+# --- Parse boolean flags from note string ---
+def parse_note_flags(note: str) -> dict:
+    """
+    Extract boolean flags from note string by simple keyword matching.
+    
+    Returns dict with keys: sweep_flag, retest_flag, imb_flag
+    - sweep_flag: True if 'sweep' substring found (case-insensitive)
+    - retest_flag: True if 'retest' substring found (case-insensitive)
+    - imb_flag: True if 'imb' substring found (case-insensitive)
+    
+    Example:
+        >>> parse_note_flags("sweep detected imb present")
+        {'sweep_flag': True, 'retest_flag': False, 'imb_flag': True}
+        
+        >>> parse_note_flags("RETEST confirmed")
+        {'sweep_flag': False, 'retest_flag': True, 'imb_flag': False}
+        
+        >>> parse_note_flags("normal signal")
+        {'sweep_flag': False, 'retest_flag': False, 'imb_flag': False}
+    """
+    if not note or not isinstance(note, str):
+        note = ""
+    note_lower = note.lower()
+    return {
+        'sweep_flag': 'sweep' in note_lower,
+        'retest_flag': 'retest' in note_lower,
+        'imb_flag': 'imb' in note_lower
+    }
+
 # --- CISD detector wrapper to add column ---
 def detect_cisd(df: pd.DataFrame, window: int = 50, normalize: bool = True, colname: str = "cisd"):
     df = df.copy()
@@ -93,11 +122,29 @@ def detect_cisd(df: pd.DataFrame, window: int = 50, normalize: bool = True, coln
 
 # --- Основна логіка сигналу ---
 def generate_signals(m15, m30, h1, h4, d1, w1, m1,
-                     cisd_window=50, cisd_threshold=0.03,
+                     cisd_window=50, cisd_threshold=0.02,
                      require_cisd_15_and_30=True, require_cisd_1h=False,
                      rare_1h_rule=False):
     """
     rare_1h_rule: if True, require H1 CISD only when 15/30 are borderline (close to threshold)
+    
+    Expected signal dict format (unit-test style example):
+    {
+        "datetime": <Timestamp>,
+        "entry": <float>,           # entry price
+        "session": "london",         # session name
+        "sweep": <bool>,             # sweep detected
+        "imbalance": <bool>,         # imbalance detected
+        "cisd_15": <float>,          # CISD value on M15
+        "cisd_30": <float>,          # CISD value on M30
+        "cisd_1h": <float>,          # CISD value on H1
+        "note": "...",               # textual note
+        "trend": "up|down|flat",     # trend direction
+        "type": "long|short",        # signal type
+        "sweep_flag": <bool>,        # extracted from note
+        "retest_flag": <bool>,       # extracted from note
+        "imb_flag": <bool>           # extracted from note
+    }
     """
     signals = []
     # compute indicators minimally / safely
@@ -226,6 +273,15 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
             if entry_price is None or pd.isna(entry_price):
                 continue
 
+            # Build descriptive note with CISD values and signal characteristics
+            note_parts = [f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}"]
+            if sweep_up or sweep_dn:
+                note_parts.append("sweep")
+            # Note: 'retest' keyword can be added by external logic when retest conditions are detected
+            # Note: 'imb' keyword will be detected if imbalance information is present
+            if row.get('imbalance', False) if 'imbalance' in row.index else False:
+                note_parts.append("imb")
+            
             sig = {
                 "datetime": dt,
                 "entry": entry_price,
@@ -235,10 +291,13 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
                 "cisd_15": cisd_15_val,
                 "cisd_30": cisd_30_val,
                 "cisd_1h": cisd_1h_val,
-                "note": f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}",
+                "note": " ".join(note_parts),
                 "trend": (h4.get('trend', pd.Series(['flat'])).iloc[-1] if ('trend' in h4.columns and not h4.empty) else 'flat'),
                 "type": direction
             }
+            # Parse note to extract boolean flags
+            note_flags = parse_note_flags(sig["note"])
+            sig.update(note_flags)
             signals.append(sig)
             total_signals += 1
 
@@ -277,7 +336,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="GBPUSD", help="Base symbol name prefix for CSVs (default GBPUSD)")
     p.add_argument("--cisd-window", type=int, default=50, help="CISD rolling window (bars) for M15 baseline")
-    p.add_argument("--cisd-threshold", type=float, default=0.03, help="Minimum absolute CISD value (normalized) to consider")
+    p.add_argument("--cisd-threshold", type=float, default=0.02, help="Minimum absolute CISD value (normalized) to consider")
     p.add_argument("--require-cisd-15-and-30", dest="require_cisd_15_and_30", action="store_true", help="Require CISD on both 15m and 30m")
     p.add_argument("--no-require-cisd-15-and-30", dest="require_cisd_15_and_30", action="store_false", help="Do NOT require CISD on both 15m and 30m (allow either)")
     p.add_argument("--require-cisd-1h", dest="require_cisd_1h", action="store_true", help="Require CISD also on 1h (strict)")
