@@ -91,9 +91,35 @@ def detect_cisd(df: pd.DataFrame, window: int = 50, normalize: bool = True, coln
     df[colname] = compute_cisd_proxy(df, window=window, normalize=normalize)
     return df
 
+# --- Parse note for boolean flags ---
+def parse_note_flags(note):
+    """
+    Extract boolean flags from note text.
+    Returns dict with sweep_flag, retest_flag, imb_flag.
+    """
+    if not note or not isinstance(note, str):
+        return {"sweep_flag": False, "retest_flag": False, "imb_flag": False}
+    
+    note_lower = note.lower()
+    
+    # Check for sweep
+    sweep_flag = "sweep" in note_lower
+    
+    # Check for retest (Latin and Cyrillic)
+    retest_flag = "retest" in note_lower or "ретест" in note_lower
+    
+    # Check for imb or imbalance
+    imb_flag = "imb" in note_lower or "imbalance" in note_lower
+    
+    return {
+        "sweep_flag": sweep_flag,
+        "retest_flag": retest_flag,
+        "imb_flag": imb_flag
+    }
+
 # --- Основна логіка сигналу ---
 def generate_signals(m15, m30, h1, h4, d1, w1, m1,
-                     cisd_window=50, cisd_threshold=0.03,
+                     cisd_window=50, cisd_threshold=0.02,
                      require_cisd_15_and_30=True, require_cisd_1h=False,
                      rare_1h_rule=False):
     """
@@ -226,6 +252,18 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
             if entry_price is None or pd.isna(entry_price):
                 continue
 
+            # Build note and parse flags from it
+            note_text = f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}"
+            
+            # Check for existing note/sweep_fractal_note in row
+            if 'note' in row.index and pd.notna(row.get('note')):
+                note_text = str(row.get('note')) + " " + note_text
+            elif 'sweep_fractal_note' in row.index and pd.notna(row.get('sweep_fractal_note')):
+                note_text = str(row.get('sweep_fractal_note')) + " " + note_text
+            
+            # Parse note for flags
+            note_flags = parse_note_flags(note_text)
+
             sig = {
                 "datetime": dt,
                 "entry": entry_price,
@@ -235,9 +273,12 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
                 "cisd_15": cisd_15_val,
                 "cisd_30": cisd_30_val,
                 "cisd_1h": cisd_1h_val,
-                "note": f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}",
+                "note": note_text,
                 "trend": (h4.get('trend', pd.Series(['flat'])).iloc[-1] if ('trend' in h4.columns and not h4.empty) else 'flat'),
-                "type": direction
+                "type": direction,
+                "sweep_flag": note_flags["sweep_flag"],
+                "retest_flag": note_flags["retest_flag"],
+                "imb_flag": note_flags["imb_flag"]
             }
             signals.append(sig)
             total_signals += 1
@@ -277,7 +318,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="GBPUSD", help="Base symbol name prefix for CSVs (default GBPUSD)")
     p.add_argument("--cisd-window", type=int, default=50, help="CISD rolling window (bars) for M15 baseline")
-    p.add_argument("--cisd-threshold", type=float, default=0.03, help="Minimum absolute CISD value (normalized) to consider")
+    p.add_argument("--cisd-threshold", type=float, default=0.02, help="Minimum absolute CISD value (normalized) to consider")
     p.add_argument("--require-cisd-15-and-30", dest="require_cisd_15_and_30", action="store_true", help="Require CISD on both 15m and 30m")
     p.add_argument("--no-require-cisd-15-and-30", dest="require_cisd_15_and_30", action="store_false", help="Do NOT require CISD on both 15m and 30m (allow either)")
     p.add_argument("--require-cisd-1h", dest="require_cisd_1h", action="store_true", help="Require CISD also on 1h (strict)")
@@ -301,3 +342,73 @@ if __name__ == "__main__":
 
     for sig in signals:
         print(sig)
+    
+    # CSV Export Example:
+    # To export signals to CSV with all fields including the new boolean flags:
+    # import csv
+    # with open('signals.csv', 'w', newline='') as csvfile:
+    #     fieldnames = ['datetime', 'entry', 'session', 'sweep', 'imbalance', 
+    #                   'cisd_15', 'cisd_30', 'cisd_1h', 'note', 'trend', 'type',
+    #                   'sweep_flag', 'retest_flag', 'imb_flag']
+    #     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    #     writer.writeheader()
+    #     for sig in signals:
+    #         writer.writerow(sig)
+
+
+# --- Unit Test Style Example ---
+# Example demonstrating expected signal dict structure with the three new boolean fields:
+#
+# Example 1: Signal with sweep in note
+# signal_1 = {
+#     "datetime": "2024-01-15 10:30:00",
+#     "entry": 1.2345,
+#     "session": "london",
+#     "sweep": True,
+#     "imbalance": False,
+#     "cisd_15": 0.0234,
+#     "cisd_30": 0.0212,
+#     "cisd_1h": 0.0189,
+#     "note": "sweep detected cisd15=0.0234 cisd30=0.0212 cisd1h=0.0189",
+#     "trend": "up",
+#     "type": "long",
+#     "sweep_flag": True,    # 'sweep' found in note
+#     "retest_flag": False,  # no 'retest' or 'ретест' in note
+#     "imb_flag": False      # no 'imb' or 'imbalance' in note
+# }
+#
+# Example 2: Signal with retest and imbalance
+# signal_2 = {
+#     "datetime": "2024-01-15 14:45:00",
+#     "entry": 1.2367,
+#     "session": "new_york",
+#     "sweep": False,
+#     "imbalance": True,
+#     "cisd_15": -0.0256,
+#     "cisd_30": -0.0243,
+#     "cisd_1h": -0.0221,
+#     "note": "retest of imbalance zone cisd15=-0.0256 cisd30=-0.0243 cisd1h=-0.0221",
+#     "trend": "down",
+#     "type": "short",
+#     "sweep_flag": False,   # no 'sweep' in note
+#     "retest_flag": True,   # 'retest' found in note (case-insensitive)
+#     "imb_flag": True       # 'imbalance' found in note
+# }
+#
+# Example 3: Cyrillic retest keyword
+# signal_3 = {
+#     "datetime": "2024-01-15 16:00:00",
+#     "entry": 1.2389,
+#     "session": "new_york",
+#     "sweep": True,
+#     "imbalance": False,
+#     "cisd_15": 0.0298,
+#     "cisd_30": 0.0267,
+#     "cisd_1h": 0.0245,
+#     "note": "Sweep with ретест cisd15=0.0298 cisd30=0.0267 cisd1h=0.0245",
+#     "trend": "up",
+#     "type": "long",
+#     "sweep_flag": True,    # 'Sweep' found (case-insensitive)
+#     "retest_flag": True,   # 'ретест' found (Cyrillic variant)
+#     "imb_flag": False      # no 'imb' or 'imbalance' in note
+# }
