@@ -273,6 +273,15 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
             if entry_price is None or pd.isna(entry_price):
                 continue
 
+            # Build descriptive note with CISD values and signal characteristics
+            note_parts = [f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}"]
+            if sweep_up or sweep_dn:
+                note_parts.append("sweep")
+            # Note: 'retest' keyword can be added by external logic when retest conditions are detected
+            # Note: 'imb' keyword will be detected if imbalance information is present
+            if row.get('imbalance', False) if 'imbalance' in row.index else False:
+                note_parts.append("imb")
+            
             sig = {
                 "datetime": dt,
                 "entry": entry_price,
@@ -282,7 +291,7 @@ def generate_signals(m15, m30, h1, h4, d1, w1, m1,
                 "cisd_15": cisd_15_val,
                 "cisd_30": cisd_30_val,
                 "cisd_1h": cisd_1h_val,
-                "note": f"cisd15={cisd_15_val:.4f} cisd30={cisd_30_val:.4f} cisd1h={cisd_1h_val:.4f}",
+                "note": " ".join(note_parts),
                 "trend": (h4.get('trend', pd.Series(['flat'])).iloc[-1] if ('trend' in h4.columns and not h4.empty) else 'flat'),
                 "type": direction
             }
