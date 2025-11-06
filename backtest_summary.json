@@ -1,0 +1,21 @@
+{
+  "total_signals": 3213,
+  "date_range": "2024-08-01 04:45:00 to 2024-08-31 23:30:00",
+  "signals_by_direction": {
+    "SHORT": 1730,
+    "LONG": 1483
+  },
+  "signals_by_session": {
+    "asia": 1900,
+    "new_york": 807,
+    "london": 389,
+    "frankfurt": 117
+  },
+  "most_active_day": "2024-08-18",
+  "conditions_frequency": {
+    "m15_fvg": 854,
+    "cisd": 3213,
+    "fvg_touch": 2359,
+    "trend_aligned": 1649
+  }
+}
